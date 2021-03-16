@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.7.0 FATAL_ERROR) #CPACK_DEBIAN_<COMPONENT>_PACKAGE_NAME
 
 find_package(IRODS 4.3.0 EXACT REQUIRED CONFIG)
+set(IRODS_PACKAGE_PREFIX "${PACKAGE_PREFIX_DIR}")
 
 include(RequireOutOfSourceBuild)
 
@@ -11,6 +12,13 @@ set(CMAKE_CXX_STANDARD 17)
 project(icommands
   VERSION "${IRODS_VERSION}"
   LANGUAGES C CXX)
+
+set(CMAKE_SKIP_BUILD_RPATH OFF)
+set(CMAKE_SKIP_INSTALL_RPATH OFF)
+set(CMAKE_SKIP_RPATH OFF)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
 include(UseLibCXX)
 
@@ -97,6 +105,8 @@ endif()
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter)
+
+add_custom_target(icommands)
 
 set(
   IRODS_CLIENT_ICOMMANDS_EXECUTABLES
@@ -185,11 +195,13 @@ foreach(EXECUTABLE ${IRODS_CLIENT_ICOMMANDS_EXECUTABLES})
     )
   target_compile_definitions(${EXECUTABLE} PRIVATE ${IRODS_COMPILE_DEFINITIONS} BOOST_SYSTEM_NO_DEPRECATED)
   target_compile_options(${EXECUTABLE} PRIVATE -Wno-write-strings)
+  add_dependencies(icommands ${EXECUTABLE})
   install(
     TARGETS
     ${EXECUTABLE}
     RUNTIME
     DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT icommands
     )
 
   if (IRODS_LINUX_DISTRIBUTION_NAME STREQUAL "centos")
@@ -222,6 +234,7 @@ foreach(EXECUTABLE ${IRODS_CLIENT_ICOMMANDS_EXECUTABLES})
       FILES
       ${EXECUTABLE_MANPAGE}.gz
       DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+      COMPONENT manpages
       )
   endif()
 endforeach()
@@ -238,6 +251,7 @@ foreach(IRODS_CLIENT_ICOMMANDS_SCRIPT ${IRODS_CLIENT_ICOMMANDS_SCRIPTS})
     ${SCRIPT_SRC_PATH}
     DESTINATION ${CMAKE_INSTALL_BINDIR}
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    COMPONENT icommands
     )
 
   if (IRODS_LINUX_DISTRIBUTION_NAME STREQUAL "centos")
@@ -266,6 +280,7 @@ foreach(IRODS_CLIENT_ICOMMANDS_SCRIPT ${IRODS_CLIENT_ICOMMANDS_SCRIPTS})
       FILES
       ${SCRIPT_MANPAGE}.gz
       DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+      COMPONENT manpages
       )
   endif()
 endforeach()
@@ -273,7 +288,47 @@ endforeach()
 install(
   DIRECTORY ${CMAKE_SOURCE_DIR}/test
   DESTINATION ${IRODS_HOME_DIRECTORY}/clients/icommands
+  COMPONENT testdata
   )
+
+
+set(ICOMMANDS_USERSPACE_TARBALL_PATH "${CMAKE_CURRENT_BINARY_DIR}/irods-icommands-${IRODS_VERSION}.tar.gz")
+
+# fetch the parts of irods-runtime currently exposed
+set(irods_runtime_components "irods_client;irods_common;irods_plugin_dependencies;irods_server")
+foreach(irods_runtime_component ${irods_runtime_components})
+  unset(iimported_location)
+  get_target_property(iimported_location ${irods_runtime_component} LOCATION)
+  list(APPEND IRODS_RUNTIME_LIBRARY_PATHS "${iimported_location}")
+  unset(iimported_location)
+endforeach()
+
+add_custom_command(
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/packaging/userspace/userspace-packager.py" "-v" "-v" "-v"
+    "--cmake-path=${CMAKE_COMMAND}"
+    "$<$<BOOL:${CMAKE_STRIP}>:--strip-path=${CMAKE_STRIP}>"
+    "--target-platform=${IRODS_LINUX_DISTRIBUTION_NAME}"
+    "--target-platform-variant=${IRODS_LINUX_DISTRIBUTION_VERSION_MAJOR}"
+    "--cmake-install-prefix=${CMAKE_INSTALL_PREFIX}"
+    "--cmake-install-bindir=${CMAKE_INSTALL_BINDIR}"
+    "--cmake-install-sbindir=${CMAKE_INSTALL_SBINDIR}"
+    "--cmake-install-libdir=${CMAKE_INSTALL_LIBDIR}"
+    "--irods-package-prefix=${IRODS_PACKAGE_PREFIX}"
+    "--irods-install-prefix=${IRODS_INSTALL_PREFIX}"
+    "--irods-install-bindir=${IRODS_INSTALL_BINDIR}"
+    "--irods-install-sbindir=${IRODS_INSTALL_SBINDIR}"
+    "--irods-install-libdir=${IRODS_INSTALL_LIBDIR}"
+    "--irods-pluginsdir=${IRODS_PLUGINS_DIRECTORY}"
+    "$<$<BOOL:${IRODS_RUNTIME_LIBRARY_PATHS}>:--irods-runtime-lib=$<JOIN:${IRODS_RUNTIME_LIBRARY_PATHS},;--irods-runtime-lib=>>"
+    "--build-dir=${CMAKE_CURRENT_BINARY_DIR}"
+    "--work-dir=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/userspace-tarball"
+    "--install-component=icommands"
+    "$<$<BOOL:${IRODS_CLIENT_ICOMMANDS_SCRIPTS}>:--script-icommand=$<JOIN:${IRODS_CLIENT_ICOMMANDS_SCRIPTS},;--script-icommand=>>"
+    "--output=${ICOMMANDS_USERSPACE_TARBALL_PATH}"
+  DEPENDS icommands
+  OUTPUT "${ICOMMANDS_USERSPACE_TARBALL_PATH}"
+  COMMAND_EXPAND_LISTS)
+add_custom_target(userspace-tarball DEPENDS "${ICOMMANDS_USERSPACE_TARBALL_PATH}")
 
 
 if (NOT CPACK_DEBIAN_PACKAGE_VERSION)

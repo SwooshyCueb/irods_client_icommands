@@ -1,2 +1,4 @@
 tags
 .dir-locals.el
+__pycache__
+CMakeLists.txt.user
