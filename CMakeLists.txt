@@ -243,7 +243,6 @@ foreach(EXECUTABLE ${IRODS_CLIENT_ICOMMANDS_EXECUTABLES})
     irods_common
     nlohmann_json::nlohmann_json
     fmt::fmt
-    ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_program_options.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so
@@ -254,7 +253,6 @@ foreach(EXECUTABLE ${IRODS_CLIENT_ICOMMANDS_EXECUTABLES})
     ${EXECUTABLE}
     PRIVATE
     ${IRODS_INCLUDE_DIRS}
-    ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
     ${IRODS_EXTERNALS_FULLPATH_CPPZMQ}/include
     ${IRODS_EXTERNALS_FULLPATH_ZMQ}/include
